@@ -1,0 +1,64 @@
+{
+  "name": "craftpulse/craft-flanders-make",
+  "description": "Flanders Make Service Connector",
+  "type": "craft-plugin",
+  "version": "5.0.0-alpha.1",
+  "keywords": [
+    "craft",
+    "cms",
+    "craftcms",
+    "craft-plugin",
+    "service connector"
+  ],
+  "support":{
+    "email": "support@craftpulse.com",
+    "docs": "https://github.com/craftpulse/craft-flanders-make/blob/v5/README.md",
+    "issues": "https://github.com/craftpulse/craft-flanders-make/issues"
+  },
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "CraftPulse",
+      "email": "support@craft-pulse.com"
+    }
+  ],
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "require": {
+    "php": "^8.2.0",
+    "craftcms/cms": "^5.0.0",
+    "nesbot/carbon": "^2.0.0",
+    "nystudio107/craft-plugin-vite": "^5.0.0"
+  },
+  "require-dev":{
+    "craftcms/ecs": "dev-main",
+    "craftcms/phpstan": "dev-main",
+    "yiisoft/yii2-redis": "^2.0",
+    "vlucas/phpdotenv": "^5.4.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "craftpulse\\flandersmake\\": "src/"
+    }
+  },
+  "extra": {
+    "name": "Flanders Make",
+    "handle": "flanders-make",
+    "developer": "CraftPulse",
+    "developerUrl": "https://craft-pulse.com",
+    "documentationUrl": "https://github.com/craftpulse/craft-flanders-make/blob/v5/README.md",
+    "changelogUrl": "https://github.com/craftpulse/craft-flanders-make/blob/v5/CHANGELOG.md",
+    "class": "craftpulse\\flandersmake\\FlandersMake"
+  },
+  "scripts": {
+    "phpstan": "phpstan --ansi --memory-limit=1G",
+    "check-cs": "ecs check --ansi",
+    "fix-cs": "ecs check --fix --ansi"
+  },
+  "config": {
+    "allow-plugins": {
+      "yiisoft/yii2-composer": true,
+      "craftcms/plugin-installer": true
+    }
+  }
+}
