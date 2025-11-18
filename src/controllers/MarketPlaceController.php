@@ -11,9 +11,12 @@
 namespace craftpulse\flandersmake\controllers;
 
 use Craft;
+use craft\commerce\elements\Product;
 use craft\errors\MissingComponentException;
 use craft\web\Controller;
 use craftpulse\flandersmake\FlandersMake;
+use Throwable;
+use verbb\sociallogin\SocialLogin;
 use yii\base\InvalidConfigException;
 use yii\web\BadRequestHttpException;
 use yii\web\MethodNotAllowedHttpException;
@@ -28,7 +31,7 @@ use yii\web\Response;
  * @package     FlandersMake
  * @since       5.0.0
  */
-class MarketplaceController extends Controller
+class MarketPlaceController extends Controller
 {
     /**
      * @inheritdoc
@@ -45,8 +48,13 @@ class MarketplaceController extends Controller
      * Check user's I3oT access status
      * Returns Azure connection status + I3oT registration status
      *
-     * POST /actions/flanders-make/marketplace/check-i3ot-status
+     * POST /actions/flanders-make/market-place/check-i3ot-status
      *
+     * @return Response
+     * @throws BadRequestHttpException
+     * @throws InvalidConfigException
+     * @throws MethodNotAllowedHttpException
+     * @throws Throwable
      */
     public function actionCheckI3otStatus(): Response
     {
@@ -77,10 +85,61 @@ class MarketplaceController extends Controller
     }
 
     /**
+     * POST /actions/flanders-make/market-place/generate-sso-token
+     *
+     * @throws Throwable
+     */
+    public function actionGenerateSsoToken(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAcceptsJson();
+
+        $currentUser = Craft::$app->getUser()->getIdentity();
+        $appHandle = Craft::$app->getRequest()->getBodyParam('appHandle');
+
+        if (!$currentUser) {
+            return $this->asJson(['success' => false, 'error' => 'Not authorized']);
+        }
+
+        // Get the connection for the current user and Azure
+        $connection = SocialLogin::$plugin->getConnections()->getConnectionByUserAndProvider(
+            $currentUser->id,
+            'azure'
+        );
+
+        if (!$connection || !$connection->getIsConnected()) {
+            return $this->asJson(['success' => false, 'error' => 'Not authorized - Azure not connected']);
+        }
+
+        // Find the Commerce product
+        $product = Product::find()->slug($appHandle)->one();
+
+        if (!$product) {
+            return $this->asJson(['success' => false, 'error' => 'Product not found']);
+        }
+
+        // Generate a simple signed token with just user identity
+        $payload = [
+            'email' => $currentUser->email,
+            'userId' => $currentUser->id,
+            'fullName' => $currentUser->fullName,
+            'exp' => time() + 300, // 5 minutes
+        ];
+
+        $token = base64_encode(json_encode($payload));
+        $signature = hash_hmac('sha256', $token, Craft::$app->getConfig()->getGeneral()->securityKey);
+
+        return $this->asJson([
+            'success' => true,
+            'launchUrl' => $product->applicationUrl . '?sso=' . $token . '.' . $signature
+        ]);
+    }
+
+    /**
      * Get I3oT documentation URL
      * Requires both Azure SSO connection AND I3oT registration
      *
-     * POST /actions/flanders-make/marketplace/get-i3ot-url
+     * POST /actions/flanders-make/market-place/get-i3ot-url
      *
      */
     public function actionGetI3otUrl(): Response
@@ -128,11 +187,11 @@ class MarketplaceController extends Controller
      *
      * This endpoint checks with Azure if the current user has access to the requested app
      *
-     * POST /actions/flanders-make/marketplace/validate-access
+     * POST /actions/flanders-make/market-place/validate-access
      * Body: { appHandle: "demo-app" }
      *
      * @return Response
-     * @throws \Throwable
+     * @throws Throwable
      * @throws MissingComponentException
      * @throws InvalidConfigException
      * @throws BadRequestHttpException
@@ -198,7 +257,7 @@ class MarketplaceController extends Controller
      *
      * This endpoint provides the launch URL for an app if the user has access
      *
-     * POST /actions/flanders-make/marketplace/launch-app
+     * POST /actions/flanders-make/market-place/launch-app
      * Body: { appHandle: "demo-app" }
      *
      * @return Response
@@ -206,7 +265,7 @@ class MarketplaceController extends Controller
      * @throws InvalidConfigException
      * @throws MethodNotAllowedHttpException
      * @throws MissingComponentException
-     * @throws \Throwable
+     * @throws Throwable
      */
     public function actionLaunchApp(): Response
 {
@@ -258,7 +317,7 @@ class MarketplaceController extends Controller
     /**
      * Get marketplace apps list
      *
-     * GET /actions/flanders-make/marketplace/get-apps
+     * GET /actions/flanders-make/market-place/get-apps
      *
      */
     public function actionGetApps(): Response
@@ -285,7 +344,7 @@ class MarketplaceController extends Controller
     /**
      * Clear validation cache (for testing)
      *
-     * POST /actions/flanders-make/marketplace/clear-validation
+     * POST /actions/flanders-make/market-place/clear-validation
      *
      * @return Response
      * @throws BadRequestHttpException

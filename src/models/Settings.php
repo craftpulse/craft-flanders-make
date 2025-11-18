@@ -24,5 +24,44 @@ use craft\behaviors\EnvAttributeParserBehavior;
  */
 class Settings extends Model
 {
+    /**
+     * Power Automate webhook URL for I3oT registration
+     *
+     * @var string|null
+     */
+    public ?string $powerAutomateUrl = null;
 
+    /**
+     * Enable auto-registration with I3oT on user creation
+     *
+     * @var bool
+     */
+    public bool $autoRegisterI3oT = true;
+
+    /**
+     * @inheritdoc
+     */
+    public function behaviors(): array
+    {
+        return [
+            'parser' => [
+                'class' => EnvAttributeParserBehavior::class,
+                'attributes' => [
+                    'powerAutomateUrl',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function defineRules(): array
+    {
+        return [
+            [['powerAutomateUrl'], 'string'],
+            [['powerAutomateUrl'], 'url'],
+            [['autoRegisterI3oT'], 'boolean'],
+        ];
+    }
 }
