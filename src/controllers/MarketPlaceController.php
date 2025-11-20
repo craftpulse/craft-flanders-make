@@ -85,57 +85,6 @@ class MarketPlaceController extends Controller
     }
 
     /**
-     * POST /actions/flanders-make/market-place/generate-sso-token
-     *
-     * @throws Throwable
-     */
-    public function actionGenerateSsoToken(): Response
-    {
-        $this->requirePostRequest();
-        $this->requireAcceptsJson();
-
-        $currentUser = Craft::$app->getUser()->getIdentity();
-        $appHandle = Craft::$app->getRequest()->getBodyParam('appHandle');
-
-        if (!$currentUser) {
-            return $this->asJson(['success' => false, 'error' => 'Not authorized']);
-        }
-
-        // Get the connection for the current user and Azure
-        $connection = SocialLogin::$plugin->getConnections()->getConnectionByUserAndProvider(
-            $currentUser->id,
-            'azure'
-        );
-
-        if (!$connection || !$connection->getIsConnected()) {
-            return $this->asJson(['success' => false, 'error' => 'Not authorized - Azure not connected']);
-        }
-
-        // Find the Commerce product
-        $product = Product::find()->slug($appHandle)->one();
-
-        if (!$product) {
-            return $this->asJson(['success' => false, 'error' => 'Product not found']);
-        }
-
-        // Generate a simple signed token with just user identity
-        $payload = [
-            'email' => $currentUser->email,
-            'userId' => $currentUser->id,
-            'fullName' => $currentUser->fullName,
-            'exp' => time() + 300, // 5 minutes
-        ];
-
-        $token = base64_encode(json_encode($payload));
-        $signature = hash_hmac('sha256', $token, Craft::$app->getConfig()->getGeneral()->securityKey);
-
-        return $this->asJson([
-            'success' => true,
-            'launchUrl' => $product->applicationUrl . '?sso=' . $token . '.' . $signature
-        ]);
-    }
-
-    /**
      * Get I3oT documentation URL
      * Requires both Azure SSO connection AND I3oT registration
      *

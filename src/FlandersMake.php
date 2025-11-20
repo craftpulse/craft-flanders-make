@@ -29,6 +29,9 @@ use craft\web\UrlManager;
 use craftpulse\flandersmake\models\Settings as SettingsModel;
 use craftpulse\flandersmake\services\ServicesTrait;
 
+use verbb\auth\events\AuthorizationUrlEvent;
+use verbb\auth\services\OAuth;
+
 use Monolog\Formatter\LineFormatter;
 use Psr\Log\LogLevel;
 use Throwable;
@@ -111,6 +114,22 @@ class FlandersMake extends Plugin
             $this->registerCpUrlRules();
             $this->installCpEventHandlers();
         }
+
+        // Add login_hint to Azure authorization URL
+        Event::on(
+            OAuth::class,
+            OAuth::EVENT_BEFORE_AUTHORIZATION_REDIRECT,
+            function(AuthorizationUrlEvent $event) {
+                if ($event->provider->handle === 'azure') {
+                    $currentUser = Craft::$app->getUser()->getIdentity();
+
+                    if ($currentUser && $currentUser->email) {
+                        $separator = (str_contains($event->authUrl, '?')) ? '&' : '?';
+                        $event->authUrl = $event->authUrl . $separator . 'login_hint=' . urlencode($currentUser->email);
+                    }
+                }
+            }
+        );
 
         // Log that the plugin has loaded
         Craft::info(
