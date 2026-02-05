@@ -119,17 +119,6 @@ class AzureService extends Component
     }
 
     /**
-     * Get I3oT Documentation URL
-     *
-     * @return string
-     */
-    public function getI3oTUrl(): string
-    {
-        $settings = FlandersMake::$plugin->getSettings();
-        return $settings->i3otDocumentationUrl;
-    }
-
-    /**
      * Validate user access to an application
      * For POC: Returns mock validation data
      * For Production: Would call actual Azure API
