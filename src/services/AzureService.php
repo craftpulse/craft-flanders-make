@@ -94,7 +94,7 @@ class AzureService extends Component
                 'timeout' => 30,
             ]);
 
-            if ($response->getStatusCode() === 200) {
+            if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
                 Craft::info("I3oT registration successful: {$email}", 'flanders-make');
 
                 return [
