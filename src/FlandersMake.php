@@ -258,45 +258,45 @@ class FlandersMake extends Plugin
     }
 
     /**
-     * Handle user registration - automatically register with I3oT
+     * Handle user registration/activation - automatically register with I3oT
+     * Fires on every user save. The cache guard prevents duplicate API calls.
+     * This handles both native registration and Social Login (forceActivate) paths.
+     *
      * @throws InvalidConfigException
      */
     public static function handleUserRegistration(ModelEvent $event): void
     {
-        // Check if auto-registration is enabled
+        /** @var User $user */
+        $user = $event->sender;
+
+        // Only for active users with an email
+        if ($user->status !== User::STATUS_ACTIVE || empty($user->email)) {
+            Craft::info("Skipping I3oT registration - user not active or no email: {$user->id}", 'flanders-make');
+            return;
+        }
+
+        // Check if auto-registration is enabled in settings
         if (!FlandersMake::$plugin->getSettings()->autoRegisterI3oT) {
             return;
         }
 
-        /** @var User $user */
-        $user = $event->sender;
-
-        // Skip if no email
-        if (empty($user->email)) {
-            return;
-        }
-
-        // Skip if user is not active
-        if ($user->status !== User::STATUS_ACTIVE) {
-            return;
-        }
-
-        // Check if already registered
+        // Cache guard prevents duplicate registrations
         $alreadyRegistered = Craft::$app->getCache()->get("i3ot_registered_{$user->id}");
         if ($alreadyRegistered) {
             return;
         }
 
-        Craft::info("Registering user with I3oT: {$user->email}", 'flanders-make');
+        Craft::info("Auto-registering user with I3oT: {$user->email}", 'flanders-make');
 
         // Register with I3oT via Power Automate
         $result = FlandersMake::$plugin->getAzure()->registerI3oT($user->email);
 
         if ($result['success']) {
+            // Cache registration for 1 year
             Craft::$app->getCache()->set("i3ot_registered_{$user->id}", true, 31536000);
-            Craft::info("Successfully registered user with I3oT: {$user->email}", 'flanders-make');
+            Craft::info("Successfully auto-registered user with I3oT: {$user->email}", 'flanders-make');
         } else {
-            Craft::warning("Failed to register user with I3oT: {$user->email} - {$result['message']}", 'flanders-make');
+            Craft::warning("Failed to auto-register user with I3oT: {$user->email} - {$result['message']}", 'flanders-make');
         }
     }
 

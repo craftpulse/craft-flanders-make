@@ -85,6 +85,108 @@ class MarketPlaceController extends Controller
     }
 
     /**
+     * Proxy endpoint call to Power Automate
+     * Avoids CORS issues by calling from server-side
+     *
+     * POST /actions/flanders-make/market-place/call-endpoint
+     * Body: { variantId: 123 }
+     *
+     * @return Response
+     * @throws BadRequestHttpException
+     * @throws MethodNotAllowedHttpException
+     * @throws Throwable
+     */
+    public function actionCallEndpoint(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAcceptsJson();
+
+        $currentUser = Craft::$app->getUser()->getIdentity();
+
+        if (!$currentUser) {
+            return $this->asJson([
+                'success' => false,
+                'error' => 'User not authenticated',
+            ]);
+        }
+
+        $variantId = Craft::$app->getRequest()->getBodyParam('variantId');
+
+        if (empty($variantId)) {
+            return $this->asJson([
+                'success' => false,
+                'error' => 'Variant ID is required',
+            ]);
+        }
+
+        // Look up the variant and get the endpoint URL server-side
+        $variant = \craft\commerce\elements\Variant::find()
+            ->id($variantId)
+            ->one();
+
+        if (!$variant) {
+            Craft::warning("Call endpoint: variant not found: {$variantId}", 'flanders-make');
+            return $this->asJson([
+                'success' => false,
+                'error' => 'Variant not found',
+            ]);
+        }
+
+        $endpointUrl = $variant->endpoint->url ?? null;
+
+        if (empty($endpointUrl)) {
+            Craft::warning("Call endpoint: no endpoint URL on variant {$variantId}", 'flanders-make');
+            return $this->asJson([
+                'success' => false,
+                'error' => 'No endpoint configured for this variant',
+            ]);
+        }
+
+        // Whitelist: only allow Power Automate domains
+        $parsedHost = parse_url($endpointUrl, PHP_URL_HOST);
+        if (!$parsedHost || !str_ends_with($parsedHost, '.powerplatform.com')) {
+            Craft::error("Call endpoint: blocked non-whitelisted domain: {$parsedHost}", 'flanders-make');
+            return $this->asJson([
+                'success' => false,
+                'error' => 'Invalid endpoint domain',
+            ]);
+        }
+
+        Craft::info("Calling endpoint for user {$currentUser->email}, variant {$variantId}: {$endpointUrl}", 'flanders-make');
+
+        try {
+            $client = new \GuzzleHttp\Client(['verify' => false]);
+            $response = $client->post($endpointUrl, [
+                'json' => ['email' => $currentUser->email],
+                'headers' => ['Content-Type' => 'application/json'],
+                'timeout' => 30,
+            ]);
+
+            $statusCode = $response->getStatusCode();
+
+            if ($statusCode === 200) {
+                Craft::info("Endpoint call successful for {$currentUser->email}, variant {$variantId}", 'flanders-make');
+                return $this->asJson([
+                    'success' => true,
+                    'message' => 'Endpoint called successfully',
+                ]);
+            }
+
+            Craft::warning("Endpoint call returned status {$statusCode} for variant {$variantId}", 'flanders-make');
+            return $this->asJson([
+                'success' => false,
+                'error' => "Endpoint returned status: {$statusCode}",
+            ]);
+        } catch (\Exception $e) {
+            Craft::error("Endpoint proxy error for variant {$variantId}: {$e->getMessage()}", 'flanders-make');
+            return $this->asJson([
+                'success' => false,
+                'error' => 'Endpoint call failed',
+            ]);
+        }
+    }
+
+    /**
      * Get I3oT documentation URL
      * Requires both Azure SSO connection AND I3oT registration
      *
