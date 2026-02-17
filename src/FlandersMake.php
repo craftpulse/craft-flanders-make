@@ -156,9 +156,9 @@ class FlandersMake extends Plugin
 
         $encoded_params = str_replace('\\', '', Json::encode($params));
 
-        $message = Craft::t('password-policy', $message . ' ' . $encoded_params, $params);
+        $message = Craft::t('flanders-make', $message . ' ' . $encoded_params, $params);
 
-        Craft::getLogger()->log($message, $type, 'password-policy');
+        Craft::getLogger()->log($message, $type, 'flanders-make');
     }
 
     /**
@@ -271,8 +271,17 @@ class FlandersMake extends Plugin
 
         // Only for active users with an email
         if ($user->status !== User::STATUS_ACTIVE || empty($user->email)) {
-            Craft::info("Skipping I3oT registration - user not active or no email: {$user->id}", 'flanders-make');
             return;
+        }
+
+        // Only fire on new users or when status just changed to active
+        if (!$event->isNew) {
+            // Existing user — check if status actually changed
+            $previousStatus = $user->getOldAttribute('status');
+            if ($previousStatus === User::STATUS_ACTIVE) {
+                // Was already active, this is just a profile update — skip
+                return;
+            }
         }
 
         // Check if auto-registration is enabled in settings
@@ -280,7 +289,7 @@ class FlandersMake extends Plugin
             return;
         }
 
-        // Cache guard prevents duplicate registrations
+        // Cache guard as final safety net
         $alreadyRegistered = Craft::$app->getCache()->get("i3ot_registered_{$user->id}");
         if ($alreadyRegistered) {
             return;
@@ -288,11 +297,9 @@ class FlandersMake extends Plugin
 
         Craft::info("Auto-registering user with I3oT: {$user->email}", 'flanders-make');
 
-        // Register with I3oT via Power Automate
         $result = FlandersMake::$plugin->getAzure()->registerI3oT($user->email);
 
         if ($result['success']) {
-            // Cache registration for 1 year
             Craft::$app->getCache()->set("i3ot_registered_{$user->id}", true, 31536000);
             Craft::info("Successfully auto-registered user with I3oT: {$user->email}", 'flanders-make');
         } else {
@@ -357,8 +364,8 @@ class FlandersMake extends Plugin
     {
         if (Craft::getLogger()->dispatcher instanceof Dispatcher) {
             Craft::getLogger()->dispatcher->targets[] = new MonologTarget([
-                'name' => 'password-policy',
-                'categories' => ['password-policy'],
+                'name' => 'flanders-make',
+                'categories' => ['flanders-make'],
                 'level' => LogLevel::INFO,
                 'logContext' => false,
                 'allowLineBreaks' => true,

@@ -13,9 +13,11 @@ namespace craftpulse\flandersmake\services;
 use Craft;
 use craft\base\Component;
 use craft\elements\User;
+use craft\helpers\App;
+
 use craftpulse\flandersmake\FlandersMake;
 use GuzzleHttp\Client;
-use yii\base\Exception;
+use GuzzleHttp\Exception\GuzzleException;
 
 /**
  * Class AzureService
@@ -26,10 +28,6 @@ use yii\base\Exception;
  */
 class AzureService extends Component
 {
-    /**
-     * Default Power Automate URL - can be overridden in settings
-     */
-    private const DEFAULT_POWER_AUTOMATE_URL = 'https://default1da30297840843baa2da17a602c6cb.0b.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/710933a869954187b350caf9805ed720/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=pm9W6-in8S_zZAyi9xhTA_jMOv8r4aH2VwPXymulq9E';
 
     /**
      * Check if user has Azure SSO connected via Social Login plugin
@@ -79,14 +77,16 @@ class AzureService extends Component
      *
      * @param string $email
      * @return array
+     * @throws GuzzleException
      */
     public function registerI3oT(string $email): array
     {
-        $settings = FlandersMake::$plugin->getSettings();
-        $webhookUrl = $settings->powerAutomateUrl ?? self::DEFAULT_POWER_AUTOMATE_URL;
+        $webhookUrl = FlandersMake::$plugin->getSettings()->powerAutomateUrl;
 
         try {
-            $client = new Client(['verify' => false]);
+            $client = new \GuzzleHttp\Client([
+                'verify' => !App::devMode(),
+            ]);
 
             $response = $client->post($webhookUrl, [
                 'json' => ['email' => $email],
@@ -119,89 +119,12 @@ class AzureService extends Component
     }
 
     /**
-     * Validate user access to an application
-     * For POC: Returns mock validation data
-     * For Production: Would call actual Azure API
-     *
-     * @param string $userEmail
-     * @param string $appHandle
-     * @return array
-     */
-    public function validateUserAccess(string $userEmail, string $appHandle): array
-    {
-        // POC: Return mock successful validation
-        // In production, this would call an Azure API endpoint
-
-        Craft::info("Validating access for {$userEmail} to {$appHandle}", 'flanders-make');
-
-        // Mock response structure
-        return [
-            'hasAccess' => true,
-            'paymentStatus' => 'active',
-            'isOnboarded' => true,
-            'message' => 'Access granted',
-            'azureUserId' => hash('sha256', $userEmail), // Mock Azure user ID
-        ];
-    }
-
-    /**
-     * Check if user has full access based on Azure response
-     *
-     * @param array $azureResponse
-     * @return bool
-     */
-    public function hasFullAccess(array $azureResponse): bool
-    {
-        return ($azureResponse['hasAccess'] ?? false)
-            && ($azureResponse['paymentStatus'] ?? '') === 'active'
-            && ($azureResponse['isOnboarded'] ?? false);
-    }
-
-    /**
-     * Get application launch URL
-     * For POC: Returns the product's application URL
-     * For Production: Would generate SSO token and return authenticated URL
-     *
-     * @param string $userEmail
-     * @param string $appHandle
-     * @return string|null
-     */
-    public function getAppLaunchUrl(string $userEmail, string $appHandle): ?string
-    {
-        // Get the product entry
-        $product = \craft\elements\Entry::find()
-            ->section('products')
-            ->slug($appHandle)
-            ->one();
-
-        if (!$product) {
-            Craft::warning("Product not found: {$appHandle}", 'flanders-make');
-            return null;
-        }
-
-        // Get the application URL from the product
-        $applicationUrl = $product->applicationUrl ?? null;
-
-        if (!$applicationUrl) {
-            Craft::warning("No application URL configured for: {$appHandle}", 'flanders-make');
-            return null;
-        }
-
-        // POC: Return URL directly
-        // Production: Would append SSO token/parameters
-        Craft::info("Launching {$appHandle} for {$userEmail}: {$applicationUrl}", 'flanders-make');
-
-        return $applicationUrl;
-    }
-
-    /**
      * Get Power Automate webhook URL
      *
      * @return string
      */
     public function getPowerAutomateUrl(): string
     {
-        $settings = FlandersMake::$plugin->getSettings();
-        return $settings->powerAutomateUrl ?? self::DEFAULT_POWER_AUTOMATE_URL;
+        return FlandersMake::$plugin->getSettings()->powerAutomateUrl ?? '';
     }
 }

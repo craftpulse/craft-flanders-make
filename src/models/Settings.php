@@ -29,7 +29,14 @@ class Settings extends Model
      *
      * @var string|null
      */
-    public ?string $powerAutomateUrl = null;
+    public ?string $powerAutomateUrl = 'https://default1da30297840843baa2da17a602c6cb.0b.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/710933a869954187b350caf9805ed720/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=pm9W6-in8S_zZAyi9xhTA_jMOv8r4aH2VwPXymulq9E';
+
+    /**
+     * Comma-separated list of allowed endpoint domains
+     *
+     * @var string
+     */
+    public string $allowedEndpointDomains = 'powerplatform.com,logic.azure.com,flow.microsoft.com';
 
     /**
      * Enable auto-registration with I3oT on user creation
@@ -59,7 +66,7 @@ class Settings extends Model
     public function defineRules(): array
     {
         return [
-            [['powerAutomateUrl'], 'string'],
+            [['powerAutomateUrl', 'allowedEndpointDomains'], 'string'],
             [['powerAutomateUrl'], 'url'],
             [['autoRegisterI3oT'], 'boolean'],
         ];
