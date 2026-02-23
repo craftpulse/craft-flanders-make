@@ -14,15 +14,15 @@ use Craft;
 use craft\base\Model;
 use craft\base\Plugin;
 use craft\elements\User;
-use craft\events\DefineRulesEvent;
 use craft\events\ModelEvent;
 use craft\events\PluginEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
-use craft\helpers\ArrayHelper;
+use craft\events\UserEvent;
 use craft\helpers\Json;
 use craft\log\MonologTarget;
 use craft\services\Plugins;
+use craft\services\Users;
 
 use craft\services\UserPermissions;
 use craft\web\UrlManager;
@@ -36,7 +36,6 @@ use Monolog\Formatter\LineFormatter;
 use Psr\Log\LogLevel;
 use Throwable;
 use yii\base\Event;
-use yii\base\InvalidConfigException;
 use yii\base\InvalidRouteException;
 use yii\log\Dispatcher;
 use yii\log\Logger;
@@ -248,54 +247,85 @@ class FlandersMake extends Plugin
             }
         );
 
+        // Handle user activation (pending → active via email verification or admin)
+        Event::on(
+            Users::class,
+            Users::EVENT_AFTER_ACTIVATE_USER,
+            [self::class, 'handleUserActivation']
+        );
+
+        // Handle new users created as already active (Social Login with forceActivate)
         Event::on(
             User::class,
             User::EVENT_AFTER_SAVE,
-            [self::class, 'handleUserRegistration']
+            [self::class, 'handleNewActiveUser']
         );
 
         $this->registerUserPermissions();
     }
 
     /**
-     * Handle user registration/activation - automatically register with I3oT
-     * Fires on every user save. The cache guard prevents duplicate API calls.
-     * This handles both native registration and Social Login (forceActivate) paths.
-     *
-     * @throws InvalidConfigException
+     * Handle user activation (pending → active)
+     * Fires when a user is activated via email verification or admin action.
      */
-    public static function handleUserRegistration(ModelEvent $event): void
+    public static function handleUserActivation(UserEvent $event): void
     {
-        /** @var User $user */
-        $user = $event->sender;
+        $user = $event->user;
 
-        // Only for active users with an email
-        if ($user->status !== User::STATUS_ACTIVE || empty($user->email)) {
+        if (empty($user->email)) {
             return;
         }
 
-        // Only fire on new users or when status just changed to active
-        if (!$event->isNew) {
-            // Existing user — check if status actually changed
-            $previousStatus = $user->getOldAttribute('status');
-            if ($previousStatus === User::STATUS_ACTIVE) {
-                // Was already active, this is just a profile update — skip
-                return;
-            }
-        }
-
-        // Check if auto-registration is enabled in settings
         if (!FlandersMake::$plugin->getSettings()->autoRegisterI3oT) {
             return;
         }
 
-        // Cache guard as final safety net
         $alreadyRegistered = Craft::$app->getCache()->get("i3ot_registered_{$user->id}");
         if ($alreadyRegistered) {
             return;
         }
 
-        Craft::info("Auto-registering user with I3oT: {$user->email}", 'flanders-make');
+        Craft::info("Auto-registering activated user with I3oT: {$user->email}", 'flanders-make');
+
+        $result = FlandersMake::$plugin->getAzure()->registerI3oT($user->email);
+
+        if ($result['success']) {
+            Craft::$app->getCache()->set("i3ot_registered_{$user->id}", true, 31536000);
+            Craft::info("Successfully auto-registered user with I3oT: {$user->email}", 'flanders-make');
+        } else {
+            Craft::warning("Failed to auto-register user with I3oT: {$user->email} - {$result['message']}", 'flanders-make');
+        }
+    }
+
+    /**
+     * Handle new users created as already active (Social Login path)
+     * Only fires for brand new users, not profile updates.
+     */
+    public static function handleNewActiveUser(ModelEvent $event): void
+    {
+        /** @var User $user */
+        $user = $event->sender;
+
+        // Only new users
+        if (!$event->isNew) {
+            return;
+        }
+
+        // Only active users with an email
+        if ($user->status !== User::STATUS_ACTIVE || empty($user->email)) {
+            return;
+        }
+
+        if (!FlandersMake::$plugin->getSettings()->autoRegisterI3oT) {
+            return;
+        }
+
+        $alreadyRegistered = Craft::$app->getCache()->get("i3ot_registered_{$user->id}");
+        if ($alreadyRegistered) {
+            return;
+        }
+
+        Craft::info("Auto-registering new active user with I3oT: {$user->email}", 'flanders-make');
 
         $result = FlandersMake::$plugin->getAzure()->registerI3oT($user->email);
 
