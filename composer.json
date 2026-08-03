@@ -2,7 +2,6 @@
   "name": "craftpulse/craft-flanders-make",
   "description": "Flanders Make Service Connector",
   "type": "craft-plugin",
-  "version": "5.0.0-alpha.1",
   "keywords": [
     "craft",
     "cms",
